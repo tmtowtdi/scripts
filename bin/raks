@@ -1,0 +1,180 @@
+#!/usr/bin/env perl
+
+use v5.14;
+
+=head1 NAME raks
+
+=head1 DESCRIPTION
+
+Essentially this is a poor-man's rakudobrew.  I wasn't in love with the way 
+rakudobrew worked.  I can't even remember exactly why at this point, but I 
+used it for the first version of rakudo, then stopped using it.
+
+This assumes you're installing new versions of rakudo to ~/.rakudo-VERSION and 
+that you're symlinking ~/.rakudo to whatever version you want active.
+
+Add ~/.rakudo to your PATH manually - this command doesn't do that for you.
+
+=head1 SYNOPSIS
+
+ $ raks available
+ 1) rakudo-2016-03
+ 2) rakudo-2016-04
+ 3) rakudo-2016-05
+ 4) rakudo-clean-2016.04
+ 5) rakudo-clean-2016.05
+  
+ $ raks switch 2
+ Your perl6 is now using /home/jon/.rakudo-2016-04.
+
+ $ perl6 -v
+ This is Rakudo version 2016.04 built on MoarVM version 2016.04
+ implementing Perl 6.c.
+ 
+ $ raks switch 3
+ Your perl6 is now using /home/jon/.rakudo-2016-05.
+
+ $ perl6 -v
+ This is Rakudo version 2016.05 built on MoarVM version 2016.05
+ implementing Perl 6.c.
+
+=head1 RACE
+
+Is there a race condition here?  Absolutely there is.  If you call 
+'available', then install a new rakudo or delete an existing one, then call 
+'switch' using the list numbers provided before you changed what rakudos were 
+available, you have a good chance of switching to the wrong rakudo.
+
+Which, frankly, you'd deserve.  Don't be stupid.
+ 
+=cut
+
+
+
+
+package Command::Raks {#{{{
+    use MooseX::App qw(Color);
+
+    use File::Basename;
+
+    has 'rak_installdir' => (
+        is              => 'rw',
+        isa             => 'Str',
+        default         => '~',
+        documentation   => '',
+    );
+
+    sub die_error {#{{{
+        my $self    = shift;
+        my $msg     = shift;
+        die "$msg\n";
+    }#}}}
+    sub get_available_raks {#{{{
+        my $self = shift;
+
+        my @raks;
+        foreach my $fp ( glob($self->rak_installdir . "/.rakudo-*") ) {
+            my $bn = basename $fp;
+            push @raks, $bn;
+        } 
+        return @raks;
+    }#}}}
+    sub get_current_rak {#{{{
+        my $self = shift;
+        my $p6  = Path::Tiny->new( $self->rak_installdir . '/.rakudo' ) or return;
+        my $rak_path = basename readlink($p6);
+    }#}}}
+}#}}}
+package Command::Raks::Available {#{{{
+    use MooseX::App::Command;
+    extends qw(Command::Raks);
+
+    command_short_description q{List installed Rakudo versions};
+    command_long_description q{Lists out versions of Rakudo already installed on this system.};
+    command_usage q{raks available [OPTIONS] };
+
+    sub run {
+        my $self = shift;
+        my @raks = $self->get_available_raks;
+        $self->show_list( @raks );
+    }
+    sub show_list {#{{{
+        my $self = shift;
+        my @raks = @_;
+
+        my $curr    = $self->get_current_rak;
+        my $pad     = (@raks < 10) ? 1 : 2;
+        my $n       = 0;
+        for my $r(@raks) {
+            my $is_current = ($r eq $curr) ? '*' : ' ';
+            $r =~ s/^\.//;      # Remove the leading dot; it noises up the display.
+            $n++;
+            printf( "%0${pad}d) %s %s\n", $n, $is_current, $r );
+        }
+    }#}}}
+
+}#}}}
+package Command::Raks::Switch {#{{{
+    use MooseX::App::Command;
+    extends qw(Command::Raks);
+
+    use File::Basename;
+    use File::Symlink::Atomic qw(symlink);
+    use Path::Tiny;
+    use Scalar::Util qw(looks_like_number);
+
+    command_short_description q{Switch to a specific Rakudo};
+    command_long_description q{Switches the active rakudo to one chosen by the user.};
+    command_usage q{raks switch [OPTIONS] };
+
+    parameter 'number' => (
+        is                  => 'rw',
+        isa                 => 'Str',
+        documentation       => 'The number of the rakudo to switch to.  Run "raks available" first to see the numbers.',
+    );
+
+    sub run {
+        my $self = shift;
+
+        my $name = $self->resolve_name;
+        $self->die_error($self->number . ": no such Rakudo.") unless $name;
+
+        my $new_rak = $self->switch_rakudo_to($name);
+        say "Your perl6 is now using $new_rak.";
+    }
+    sub resolve_name {#{{{
+        my $self = shift;
+
+        ### This method exists to give us flexibility to allow the user to 
+        ### chose the rakudo version by typing its name instead of its numeric 
+        ### entry in the 'available' list.
+        ### But I'm not seeing a burning need for that.  "the user" is me, and 
+        ### I'm never going to type the full name if I can just type a number.
+        return $self->_resolve_name_from_number;
+    }#}}}
+    sub _resolve_name_from_number {#{{{
+        my $self = shift;
+
+        return unless looks_like_number($self->number);
+        return if int($self->number) < 1;
+
+        my @raks = $self->get_available_raks;
+        if( int($self->number) <= @raks ) {
+            return $raks[$self->number - 1];
+        }
+    }#}}}
+    sub switch_rakudo_to {#{{{
+        my $self = shift;
+        my $name = shift;
+
+        my $rak_symlink = Path::Tiny->new( $self->rak_installdir . '/' . '.rakudo' );
+        my $new_rak     = Path::Tiny->new( $self->rak_installdir . '/' . '.' . $name );
+        my $rv = symlink $new_rak->stringify, $rak_symlink->stringify;
+        return $new_rak->absolute;
+    }#}}}
+
+}#}}}
+
+Command::Raks->new_with_command->run;
+
+ # vim: syntax=perl
