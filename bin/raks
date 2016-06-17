@@ -53,9 +53,10 @@ Which, frankly, you'd deserve.  Don't be stupid.
 
 
 package Command::Raks {#{{{
-    use MooseX::App qw(Color);
+    use MooseX::App;
 
     use File::Basename;
+    use Term::ANSIColor;
 
     has 'rak_installdir' => (
         is              => 'rw',
@@ -64,10 +65,18 @@ package Command::Raks {#{{{
         documentation   => '',
     );
 
+    sub set_color {#{{{
+        my $self    = shift;
+        my $msg     = shift;
+        my $color   = shift;
+        my $start = Term::ANSIColor::color($color);
+        my $reset = Term::ANSIColor::color('reset');
+        return $start . $msg . $reset;
+    }#}}}
     sub die_error {#{{{
         my $self    = shift;
         my $msg     = shift;
-        die "$msg\n";
+        die $self->set_color($msg, 'bright_red') . "\n";
     }#}}}
     sub get_available_raks {#{{{
         my $self = shift;
@@ -102,15 +111,23 @@ package Command::Raks::Available {#{{{
         my $self = shift;
         my @raks = @_;
 
+
         my $curr    = $self->get_current_rak;
         my $pad     = (@raks < 10) ? 1 : 2;
         my $n       = 0;
+        say $self->set_color("Rakudos installed on this system:", 'bright_red');
         for my $r(@raks) {
             my $is_current = ($r eq $curr) ? '*' : ' ';
             $r =~ s/^\.//;      # Remove the leading dot; it noises up the display.
             $n++;
-            printf( "%0${pad}d) %s %s\n", $n, $is_current, $r );
+            printf(
+                "  %0${pad}d) %s %s\n", 
+                $n, 
+                $self->set_color($is_current, 'bright_green'),
+                $self->set_color($r, 'bright_yellow'),
+            );
         }
+        say $self->set_color("Use 'raks switch' to use a different one.", 'bright_red');
     }#}}}
 
 }#}}}
