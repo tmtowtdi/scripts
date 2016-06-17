@@ -3,7 +3,7 @@ Various scripts I find useful.
 
 ## raks
 Poor-man's rakudobrew, I guess, but it does what I need it to do, assuming:
-- you have one or more Rakudo installations in ~/, named ".rakudo-<<ANY STRING>>"l
+- you have one or more Rakudo installations in ~/, named ".rakudo-(ANY STRING)"l
 - ~/.rakudo is a symlink pointing to one of those installations
 - ~/.rakudo/bin/ is in your PATH and contains "perl6"
 
