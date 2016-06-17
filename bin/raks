@@ -18,11 +18,11 @@ Add ~/.rakudo to your PATH manually - this command doesn't do that for you.
 =head1 SYNOPSIS
 
  $ raks available
- 1) rakudo-2016-03
- 2) rakudo-2016-04
- 3) rakudo-2016-05
- 4) rakudo-clean-2016.04
- 5) rakudo-clean-2016.05
+ 1)   rakudo-2016-03
+ 2)   rakudo-2016-04
+ 3) * rakudo-2016-05
+ 4)   rakudo-clean-2016.04
+ 5)   rakudo-clean-2016.05
   
  $ raks switch 2
  Your perl6 is now using /home/jon/.rakudo-2016-04.
