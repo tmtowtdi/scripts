@@ -17,7 +17,7 @@ Add ~/.rakudo to your PATH manually - this command doesn't do that for you.
 
 =head1 SYNOPSIS
 
- $ raks available
+ $ raks list
  1)   rakudo-2016-03
  2)   rakudo-2016-04
  3) * rakudo-2016-05
@@ -41,9 +41,9 @@ Add ~/.rakudo to your PATH manually - this command doesn't do that for you.
 =head1 RACE
 
 Is there a race condition here?  Absolutely there is.  If you call 
-'available', then install a new rakudo or delete an existing one, then call 
+'list', then install a new rakudo or delete an existing one, then call 
 'switch' using the list numbers provided before you changed what rakudos were 
-available, you have a good chance of switching to the wrong rakudo.
+list, you have a good chance of switching to the wrong rakudo.
 
 Which, frankly, you'd deserve.  Don't be stupid.
  
@@ -78,7 +78,7 @@ package Command::Raks {#{{{
         my $msg     = shift;
         die $self->set_color($msg, 'bright_red') . "\n";
     }#}}}
-    sub get_available_raks {#{{{
+    sub get_installed_raks {#{{{
         my $self = shift;
 
         my @raks;
@@ -94,17 +94,17 @@ package Command::Raks {#{{{
         my $rak_path = basename readlink($p6);
     }#}}}
 }#}}}
-package Command::Raks::Available {#{{{
+package Command::Raks::List {#{{{
     use MooseX::App::Command;
     extends qw(Command::Raks);
 
     command_short_description q{List installed Rakudo versions};
     command_long_description q{Lists out versions of Rakudo already installed on this system.};
-    command_usage q{raks available [OPTIONS] };
+    command_usage q{raks list [OPTIONS] };
 
     sub run {
         my $self = shift;
-        my @raks = $self->get_available_raks;
+        my @raks = $self->get_installed_raks;
         $self->show_list( @raks );
     }
     sub show_list {#{{{
@@ -147,7 +147,7 @@ package Command::Raks::Switch {#{{{
     parameter 'number' => (
         is                  => 'rw',
         isa                 => 'Str',
-        documentation       => 'The number of the rakudo to switch to.  Run "raks available" first to see the numbers.',
+        documentation       => 'The number of the rakudo to switch to.  Run "raks list" first to see the numbers.',
     );
 
     sub run {
@@ -164,7 +164,7 @@ package Command::Raks::Switch {#{{{
 
         ### This method exists to give us flexibility to allow the user to 
         ### chose the rakudo version by typing its name instead of its numeric 
-        ### entry in the 'available' list.
+        ### entry in the list.
         ### But I'm not seeing a burning need for that.  "the user" is me, and 
         ### I'm never going to type the full name if I can just type a number.
         return $self->_resolve_name_from_number;
@@ -175,7 +175,7 @@ package Command::Raks::Switch {#{{{
         return unless looks_like_number($self->number);
         return if int($self->number) < 1;
 
-        my @raks = $self->get_available_raks;
+        my @raks = $self->get_installed_raks;
         if( int($self->number) <= @raks ) {
             return $raks[$self->number - 1];
         }
