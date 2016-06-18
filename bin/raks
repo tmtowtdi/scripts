@@ -185,7 +185,7 @@ package Command::Raks::Switch {#{{{
         my $name = shift;
 
         my $rak_symlink = Path::Tiny->new( $self->rak_installdir . '/' . '.rakudo' );
-        my $new_rak     = Path::Tiny->new( $self->rak_installdir . '/' . '.' . $name );
+        my $new_rak     = Path::Tiny->new( $self->rak_installdir . '/' . $name );
         my $rv = symlink $new_rak->stringify, $rak_symlink->stringify;
         return $new_rak->absolute;
     }#}}}
