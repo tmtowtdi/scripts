@@ -2,6 +2,40 @@
 
 use v5.14;
 
+
+
+
+### TBD
+### Along with the --year option for 'raks available', add a --hash option 
+### that only lists versions with available hashes.
+###
+### TBD CAUTION
+### See "raks available --year 2016".
+### That only lists out the 6 raks that came out in 2016, so the numbered list 
+### goes 01 to 06.
+###
+### There are more than 10 total raks, so we're padding to "01" instead of 
+### just "1", which needs to be fixed.
+###
+### But also, if the user decides to install number "04" with the 
+### yet-to-be-created "rak install 4" command, we'll need some way of passing 
+### along the fact that "4" means "the fourth one listed when I was only 
+### listing out raks from 2016".
+###
+### Maybe, instead of a consecutive list, we give each dist an ID (after 
+### sorting by date) and display that.  Slightly less user-friendly, but 
+### easier to deal with.
+###
+### TBD CAUTION
+### Also note that some rak versions' numbers are a bit different than others.  
+### See --year 2015 for some of these -- there are minor (presumably bug-fix) 
+### version numbers like
+###     rakudo-2015.07.2.tar.gz
+
+
+
+
+
 =head1 NAME raks
 
 =head1 DESCRIPTION
@@ -16,6 +50,20 @@ that you're symlinking ~/.rakudo to whatever version you want active.
 Add ~/.rakudo to your PATH manually - this command doesn't do that for you.
 
 =head1 SYNOPSIS
+
+Below, the I indicates a version that's already installed locally, and the H 
+indicates a version for which a hash is available online.  Versions for which 
+a hash is available will be verified before being installed.  Versions with no 
+available hash cannot be verified.
+
+ $ raks available --year 2016
+ Available Rakudos:
+ 01) I H rakudo-2016.05.tar.gz
+ 02)   H rakudo-2016.02.tar.gz
+ 03)   H rakudo-2016.03.tar.gz
+ 04)   H rakudo-2016.01.1.tar.gz
+ 05)   H rakudo-2016.01.tar.gz
+ 06)   H rakudo-2016.04.tar.gz
 
  $ raks list
  1)   rakudo-2016-03
@@ -50,6 +98,11 @@ Which, frankly, you'd deserve.  Don't be stupid.
 =cut
 
 
+package Dist {
+    use Moo;
+    has has_hash    => ( is => 'rw' );
+    has path        => ( is => 'rw', isa => sub{ ref $_[0] eq 'Path::Tiny' } );
+}
 
 
 package Command::Raks {#{{{
@@ -93,6 +146,102 @@ package Command::Raks {#{{{
         my $p6  = Path::Tiny->new( $self->rak_installdir . '/.rakudo' ) or return;
         my $rak_path = basename readlink($p6);
     }#}}}
+}#}}}
+package Command::Raks::Available {#{{{
+    use MooseX::App::Command;
+    extends qw(Command::Raks);
+
+    use Data::Dumper;
+    use Path::Tiny;
+    use WWW::Mechanize;
+
+    command_short_description q{List Rakudo versions available for install};
+    command_long_description q{Lists all available known versions of Rakudo and their local install status.};
+    command_usage q{raks available [OPTIONS] };
+
+    has 'base_url' => (
+        is                  => 'rw',
+        isa                 => 'Str',
+        default             => 'http://rakudo.org/downloads/rakudo/',
+    );
+
+    option 'year' => (
+        is                  => 'rw',
+        isa                 => 'Int',
+        default             => 0,       # include all years
+        documentation       => 'Only show Rakudo versions released during  this calendar year.',
+    );
+
+    sub run {
+        my $self = shift;
+        my $all_raks = $self->get_all_rakudos;
+        $self->find_installed_rakudos($all_raks);
+        $self->show_available_rakudos($all_raks);
+
+    }
+    sub get_all_rakudos {#{{{
+        my $self    = shift;
+        my $mech    = WWW::Mechanize->new();
+
+        ### Returns a hash of available dists.
+        ###     distname => Dist object
+
+        $mech->get( $self->base_url );
+
+        my %raks    = ();
+        my %hashes  = ();
+        for my $l($mech->links) {
+            next unless $l->url =~ /^rakudo-/;
+            if( $l->url =~ /\.asc$/ )   { $hashes{$l->url}++; }
+            else                        { $raks{$l->url} = Dist->new; }
+        }
+
+        for my $k( keys %hashes ) {
+            my $distname = $k =~ s/\.asc$//r;
+            $raks{$distname}->has_hash(1) if defined $raks{$distname};
+        }
+
+        return \%raks;
+    }#}}}
+    sub find_installed_rakudos {#{{{
+        my $self    = shift;
+        my $dists   = shift;
+
+        for my $k( keys %{$dists} ) {
+            my $instname    = '.' . ($k =~ s/\.tar\.gz$//r);
+            my $path        = Path::Tiny->new( $self->rak_installdir . '/' . $instname );
+            if( $path->exists ) {
+                $dists->{$k}->path( $path );
+            }
+        }
+    }#}}}
+    sub show_available_rakudos {#{{{
+        my $self    = shift;
+        my $dists   = shift;
+
+        say $self->set_color("Available Rakudos:", 'bright_red');
+        my $pad = ( (keys %$dists) < 10) ? 1 : 2;
+        my $n   = 0;
+        for my $name( keys %{$dists} ) {
+            if( $self->year ) {
+                my $y = $self->year;
+                next unless $name =~ /-$y\./;
+            }
+
+            $n++;
+            my $dist = $dists->{$name};
+            my $inst = ($dist->path)       ? 'I' : ' ';
+            my $hash = ($dist->has_hash)   ? 'H' : ' ';
+            printf(
+                "  %0${pad}d) %s %s %s\n", 
+                $n, 
+                $self->set_color($inst, 'bright_green'),
+                $self->set_color($hash, 'bright_cyan'),
+                $self->set_color($name, 'bright_yellow'),
+            );
+        }
+    }#}}}
+
 }#}}}
 package Command::Raks::List {#{{{
     use MooseX::App::Command;
